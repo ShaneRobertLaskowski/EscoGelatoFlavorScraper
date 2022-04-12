@@ -1,0 +1,15 @@
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\EscoGelatoFlavorScraper.exe
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\EscoGelatoFlavorScraper.deps.json
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\EscoGelatoFlavorScraper.runtimeconfig.json
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\EscoGelatoFlavorScraper.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\EscoGelatoFlavorScraper.pdb
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.csproj.AssemblyReference.cache
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.AssemblyInfoInputs.cache
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.AssemblyInfo.cs
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.csproj.CoreCompileInputs.cache
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\refint\EscoGelatoFlavorScraper.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.pdb
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.genruntimeconfig.cache
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\ref\EscoGelatoFlavorScraper.dll
