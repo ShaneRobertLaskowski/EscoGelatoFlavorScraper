@@ -13,3 +13,14 @@ C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.pdb
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.genruntimeconfig.cache
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\ref\EscoGelatoFlavorScraper.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\chromedriver.exe
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\SeleniumExtras.WaitHelpers.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Microsoft.IdentityModel.Logging.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Microsoft.IdentityModel.Tokens.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Newtonsoft.Json.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\WebDriver.Support.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\WebDriver.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Twilio.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.csproj.CopyComplete
