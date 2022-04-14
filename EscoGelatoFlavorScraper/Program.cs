@@ -4,6 +4,16 @@ using OpenQA.Selenium.Chrome;
 using ExpectedConditions = SeleniumExtras.WaitHelpers.ExpectedConditions;
 
 //need to add Environment Variables for Twilio API, phno, file directory of testing site
+namespace EscoGelatoFlavorScraper
+{
+    class Program
+    {
+        static void Main()
+        {
+
+        }
+    }
+}
 
 /// <summary>
 ///     
