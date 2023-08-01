@@ -24,3 +24,8 @@ C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\System.IdentityModel.Tokens.Jwt.dll
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Twilio.dll
 C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\obj\Debug\net6.0\EscoGelatoFlavorScraper.csproj.CopyComplete
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\selenium-manager\linux\selenium-manager
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\selenium-manager\macos\selenium-manager
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\selenium-manager\windows\selenium-manager.exe
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Users\zaggn\source\repos\EscoGelatoFlavorScraper\EscoGelatoFlavorScraper\bin\Debug\net6.0\MySqlConnector.dll

@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32328.378
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EscoGelatoFlavorScraper", "EscoGelatoFlavorScraper\EscoGelatoFlavorScraper.csproj", "{1153F3CB-8679-4841-921C-7583BC18FFF2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EscoGelatoFlavorScraper", "EscoGelatoFlavorScraper\EscoGelatoFlavorScraper.csproj", "{1153F3CB-8679-4841-921C-7583BC18FFF2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

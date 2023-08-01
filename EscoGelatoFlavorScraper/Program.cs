@@ -1,10 +1,15 @@
 ﻿//these using directives can be added as global using directives in another file
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.DevTools.V85.Debugger;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
-
+using MySqlConnector;
+using System.Data.Common;
+using System.IO;
+using System.Reflection;
 /// <author> Shane Laskowski</author>
 /// <summary>
 /// This program is a webscraper that upon collecting data from twitter, sends a SMS text alert to a
@@ -23,32 +28,150 @@ namespace EscoGelatoFlavorScraper
     class Program
     {
         //---It might be good to chuck the code of Main into a class and call that object in main.
-        //---Should chuck an Exception Catch around methods in Main method and ditch the if-else control
+        //---Should chuck an Exception Catch around methods in Main method and ditch the if-else blocks
         //---At this time app will not import customer flavor data from DB or file.  (personal use sofar)
-        //---Perhaps add an Admin User that get's alerts if "isWellFormedFlavorPosting" is a close-call.
+        //---Perhaps add an Admin User that get's alerts if "isWellFormedFlavorPosting" is a "close-call".
         //---Consider adding Google Analytics to track app statistics and soforth.
         static void Main()
         {
+
+            MyDbConnectionClass DbConnection = CreateDbConnector();
+            DbConnection.IsConnect();
+
+            List<(string, string)> allFlavorNames = QueryForFlavors(DbConnection);
+
             IWebDriver browserDriver = new ChromeDriver();
             SetUpBrowser(browserDriver);
             string postedMessege = GetPostedMessage(browserDriver);
+
             if (!isLatestFlavorPosting(browserDriver) || !isWellFormedFlavorPosting(postedMessege))
-                exitProgram(browserDriver); //add logging you dummy!
+                exitProgram(browserDriver);
             else
             {
-                //-import a general flavor list and pass to this ExtractFlavorsFromPosting method?
-                List<string> flavorsInStock = ExtractFlavorsFromPosting(postedMessege);
-                List<string> favoriteFlavors = ImportFavoriteFlavors();
-                List<string> favoriteFlavorsInStock =
-                    DetermineFavoriteFlavorsInStock(favoriteFlavors, flavorsInStock);
-                if (favoriteFlavorsInStock.Count >= 1)
-                    SendFavoriteFlavorStockingAlert(favoriteFlavorsInStock);
+                //UpdateLatestFlavorPostingDate(the new date);
+                List<string> flavorsInStock = ExtractFlavorsFromPosting(
+                    FormatFlavorPostedData(postedMessege), 
+                    FormatImportedAllFlavorsNameSet(allFlavorNames));
+
+                //Query for Phno's and Fav Flavors using flavorsInStock, (place into objects that go into List)
+                //firstname, favorite flavors in stock, phno.
+                List<Tuple<string, List<string>, string>> CustomersToAlert = QueryForCustomersToAlert(flavorsInStock, DbConnection);
+
+                //iterate through the customer list and send texts.
+                DbConnection.Close();
                 exitProgram(browserDriver);
             }
         }
+
+        private static List<Tuple<string, List<string>, string>> QueryForCustomersToAlert(List<string> flavorsInStock, MyDbConnectionClass dbConnection)
+        {
+            string CustName = "";
+            List<string> FavoriteFlavorsInstock = new List<string>();
+            string phno = "";
+            var custToAlert = new List<Tuple<string, List<string>, string>>();
+
+            //write the string query using this methods parameters
+            using var sqlcommand = new MySqlCommand("", dbConnection.Connection);
+            using var sqlreader = sqlcommand.ExecuteReader();
+
+            //run the query and return its result
+
+            //iterate through result set and "combine" similar elements
+
+            //return custToAlert
+
+            throw new NotImplementedException();
+        }
+
         /// <summary>
-        /// Checks to see if posting is the newest posting.  If it is not the latest posting then
-        /// it probably isn't the latest in-stock flavor announcement.
+        /// grabs the string literals from this computers environment variables and creates a
+        /// connection to the AWS Database for Escogelatoflavorscraper app.  Environmental
+        /// variables are used to protect the passwords and other sensitive data from the public.
+        /// </summary>
+        /// <returns></returns>
+        public static MyDbConnectionClass CreateDbConnector()
+        {
+            string? myserver = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_URL_ENDPOINT");
+            string? mylogin = Environment.GetEnvironmentVariable("AWS_EscoGelato_Login_Username");
+            string? mypass = Environment.GetEnvironmentVariable("AWS_EscoGelato_Login_Password");
+            string? mydatabase = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_Name");
+            string? myPort = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_URL_Port");
+            MyDbConnectionClass Connection = new MyDbConnectionClass(myserver, mydatabase, mylogin, mypass, myPort);
+            return Connection;
+        }
+
+        /// <summary>
+        /// Gets the date and time of the latest flavor posting recorded by this program.  a file
+        /// is used to keep this data persistant as this app quits.
+        /// </summary>
+        /// <returns></returns>
+        public static DateTime? GetLatestFlavorPostingDate()
+        {
+
+            try
+            {
+                string? LatestFlavorPostingRecordedFileDirectory = Environment.GetEnvironmentVariable("LatestFlavorPostingDateFile");
+                if (LatestFlavorPostingRecordedFileDirectory == "")
+                    throw new Exception("file directory not set");
+                else
+                {
+                    using (StreamReader sr = new StreamReader(LatestFlavorPostingRecordedFileDirectory))
+                    {
+                        //need to ensure sr isn't null
+                        string? line = sr.ReadLine();
+                        return DateTime.Parse(line);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("The file could not be read:");
+                Console.WriteLine(e.Message);
+                return new DateTime();
+            }
+        }
+
+        /// <summary>
+        /// Updates the new flavor posting date discovered by this app.  It doesnt append but
+        /// creates a new names.txt, overwriting it with the new date text.
+        /// </summary>
+        public static void UpdateLatestFlavorPostingDate(string newDate)
+        {
+            using (StreamWriter sw = new StreamWriter("LatestOfficialFlavorPostingDate.txt", false))
+            {
+                    sw.WriteLine(newDate);
+            }
+        }
+
+        /// <summary>
+        /// Querys the Database for all flavor names, both official and alias names.
+        /// </summary>
+        /// <param name="dataBaseConnection"></param>
+        /// <returns>a list of the flavor names in the form of tuples consisting of two strings, (official, alias)</returns>
+        public static List<(string, string)> QueryForFlavors(MyDbConnectionClass dataBaseConnection)
+        {
+            using var sqlcommand = new MySqlCommand("CALL GetOfficialAndAliasFlavorNames();", dataBaseConnection.Connection);
+            using var sqlreader = sqlcommand.ExecuteReader();
+
+            List<(string, string)> allExistingFlavorNames = new List<(string, string)>();
+            string officialFlavorName = "";
+            string aliasFlavorName = "";
+            while (sqlreader.Read())
+            {
+                if (sqlreader.GetValue(0) != System.DBNull.Value)
+                    officialFlavorName = sqlreader.GetString(0).Replace(" ", "");
+                if (sqlreader.GetValue(1) != System.DBNull.Value)
+                    aliasFlavorName = sqlreader.GetString(1).Replace(" ", "");
+                allExistingFlavorNames.Add((officialFlavorName, aliasFlavorName));
+                officialFlavorName = "";
+                aliasFlavorName = "";
+            }
+            return allExistingFlavorNames;
+        }
+
+        /// <summary>
+        /// Checks to see if posting is the latest posting by the company.  If it is not the latest 
+        /// posting then it probably isn't the latest in-stock flavor announcement.
         /// </summary>
         /// <param name="browserDriver"></param>
         /// <returns></returns>
@@ -58,7 +181,8 @@ namespace EscoGelatoFlavorScraper
         /// afterwards.</todo>
         private static bool isLatestFlavorPosting(IWebDriver browserDriver)
         {
-            DateTime dateOfLatestFlavorPosting = RetrieveLatestRecordedFlavorPostingDate();
+
+            DateTime? dateOfLatestFlavorPosting = GetLatestFlavorPostingDate();
             DateTime dateOfAnnouncement = RetrieveAnnouncementDate(browserDriver);
             return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
         }
@@ -95,20 +219,11 @@ namespace EscoGelatoFlavorScraper
         {
             //"C:\Users\zaggn\OneDrive\Desktop\EscoGelato\EscoGelato – Gelato, Coffee & Panini
             //in downtown Escondido.html"
-            driver.Navigate().GoToUrl("file:///C:/Users/zaggn/OneDrive/Desktop/EscoGelato/EscoGelato%20%E2%80%93%20Gelato,%20Coffee%20&%20Panini%20in%20downtown%20Escondido.html");
+            //***the navigate string should be passed into this method, not hard-coded.
+            driver.Navigate().GoToUrl("file:///C:/Users/zaggn/OneDrive/Desktop/SOFTWARE%20TESTING/EscoGelato/EscoGelato%20%E2%80%93%20Gelato,%20Coffee%20&%20Panini%20in%20downtown%20Escondido.html");
             driver.Manage().Window.Maximize();
         }
-        /// <summary>
-        /// Gets the date/time of the latest confirmed flavor announcement.  Used to determine if
-        /// an annoucement to be analyzed is the most recent, non-stale information.
-        /// </summary>
-        /// <returns></returns>
-        /// <todo>Should retrieve this persistant data from DB or stored file</todo>
-        private static DateTime RetrieveLatestRecordedFlavorPostingDate()
-        {
-            //connect to DB or file and query this data.
-            return new DateTime(1990, 10, 20, 13, 22, 30);
-        }
+
         /// <summary>
         /// Grabs the dates of the latest postings on the announcement feed.  Need to add the 
         /// amount of postings grabbed.
@@ -130,12 +245,11 @@ namespace EscoGelatoFlavorScraper
             //locate the label with info of time and date of the posting
             IWebElement dateText =
             driver.FindElement(By.XPath("/html/body/div[1]/div/div/div[2]/main/div/div/div/" +
-            "div/div/section/div/div/div[1]/div/div/div/article/div/div/div/div[3]/" +
-            "div[4]/div/div[1]/a[1]/span"));
+            "div/div/section/div/div/div[1]/div/div/article/div/div/div[3]/div[5]/div/" +
+            "div[1]/div/div/a/time"));
 
-            //Convert dateText string to dateOfAnnoucement Datetime
             dateOfAnnouncement = convertTwitterDateTextToDateTime(dateText.Text);
-            dateOfAnnouncement = new DateTime();
+            //dateOfAnnouncement = new DateTime();
 
             //return that datetime info
             return (dateOfAnnouncement);
@@ -183,15 +297,97 @@ namespace EscoGelatoFlavorScraper
         /// <exception cref="NotImplementedException"></exception>
         static bool isWellFormedFlavorPosting(string messagePosted)
         {
-            throw new NotImplementedException();
-            /*Review the typical flavor postings and analyze the characteristics of the postings
-            There are typically more than 10 flavors posted the first line usually contains a date 
-            and the word "Flavors!". Each line is typically short. Consider using a collection of 
-            flavors and check how many lines match with each flavor. Note- they post flavors on one
-            of their webpages, However not every flavor is mentioned.  Note-- "Strawberry Chocolate 
-            Chip" can be referred as "Strawberry Chip".
-            */
+            string[] linesOfTheText = messagePosted.Split("\n");
+
+            const int typicalMaxTotalLines = 25;
+            const int typicalMinTotalLines = 10;
+            const int typicalMaxLineLength = 30;
+            //there is typically more than 10 lines per posting and less than 25
+            if (linesOfTheText.Length > typicalMaxTotalLines || linesOfTheText.Length <
+                typicalMinTotalLines)
+                return false;
+
+            //!!!!!!!!!!!!!!!!!! This method below is wrong, it doesnt consider the 1st line may be in xx/xx/xxxx format
+           // if (!containsOneMonthStringText(linesOfTheText[0]))
+             //   return false;
+
+            //the 1st or 2nd line of text usually contains the word "flavors";
+            if (linesOfTheText[0].IndexOf("flavors", StringComparison.OrdinalIgnoreCase) == -1 && 
+                linesOfTheText[1].IndexOf("flavors", StringComparison.OrdinalIgnoreCase) == -1)
+                return false;
+
+            //Each line that lists flavors is typically "short", the 1st 3 lines don't contain flavors
+            string s = "";
+            for(int i = 3; i < linesOfTheText.Length; i++ )
+            {
+                s = linesOfTheText[i];
+                if (s.Length > typicalMaxLineLength)
+                    return false;
+            }
+            return true;
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="inputText"></param>
+        /// <returns></returns>
+        private static bool containsOneMonthStringText(string inputText)
+        {
+            string[] months = { "january", "february", "march", "april", "may", "june", "july",
+                "august", "september", "october", "november", "december" };
+            int numMonthsCount = 0;
+            foreach (string m in months)
+            {
+                if (inputText.IndexOf(m, StringComparison.OrdinalIgnoreCase) != -1)
+                    numMonthsCount++;
+            }
+
+            return (numMonthsCount == 1 ? true : false);
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="postedFlavorMessege"></param>
+        /// <returns></returns>
+        public static List<string> FormatFlavorPostedData(string postedFlavorMessege)
+        {
+            List<string> flavors = postedFlavorMessege.Split("\n").ToList();
+            //first two or three lines are non-saliant therefore they are removed.
+            flavors.RemoveAt(0);
+            flavors.RemoveAt(0);
+            if (flavors[0] == "\r")
+                flavors.RemoveAt(0);
+            int numberOfFlavors = flavors.Count;
+
+            for (int i = 0; i < numberOfFlavors; i++)
+            {
+                flavors.Add(ReturnLowerCaseASCII(flavors[0].Replace(" ", "")));
+                flavors.RemoveAt(0);
+            }
+            return flavors;
+        }
+        /// <summary>
+        ///  lower-case + remove spaces
+        /// </summary>
+        /// <param name="allFlavorNames"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        public static List<(string, string)> FormatImportedAllFlavorsNameSet(List<(string, string)> allFlavorNames)
+        {
+            (string,string) flavorNamePair = ("", "");
+            string officialFlavorName = "";
+            string aliasFlavorName = "";
+            for(int i = 0; i < allFlavorNames.Count; i++)
+            {
+                officialFlavorName = ReturnLowerCaseASCII(allFlavorNames[i].Item1.Replace(" ", ""));
+                aliasFlavorName = ReturnLowerCaseASCII(allFlavorNames[i].Item2.Replace(" ", ""));
+                flavorNamePair = (officialFlavorName, aliasFlavorName); //MUST be sure that item1 is officialname and not item2
+                allFlavorNames.Add(flavorNamePair);
+                allFlavorNames.RemoveAt(0);
+            }
+            return allFlavorNames;
+        }
+
         /// <summary>
         /// Extracts the flavor strings mentioned inside the posting text
         /// </summary>
@@ -199,21 +395,19 @@ namespace EscoGelatoFlavorScraper
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
         /// <todo>Remove Emojis And rename Flavor-Name Aliases</todo>
-        static List<string> ExtractFlavorsFromPosting(string flavorPosting)
+        static List<string> ExtractFlavorsFromPosting(List<string> postedFlavors, List<(string, string)> everyFlavorName)
         {
-            List<string> flavors = flavorPosting.Split("\n").ToList();
-            flavors.RemoveAt(0);
-            flavors.RemoveAt(0);
-            //flavors.Trim();
-            int numberOfFlavors = flavors.Count;
-
-            for(int i = 0; i < numberOfFlavors; i++)
+            List<string> RecognizedFlavors = new List<string>();
+            foreach(var ef in everyFlavorName)
             {
-                flavors.Add(ReturnLowerCaseASCII(flavors[0]));
-                flavors.RemoveAt(0);
+                foreach(var flavor in postedFlavors)
+                {
+                    if (flavor == ef.Item1 || flavor == ef.Item2)
+                        RecognizedFlavors.Add(ef.Item1);
+                }
             }
 
-            return flavors;
+            return RecognizedFlavors;
         }
         /// <summary>
         /// 

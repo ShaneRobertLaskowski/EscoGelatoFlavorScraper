@@ -10,15 +10,15 @@ namespace EscoGelatoFlavorScraper
     /// <todo></todo>
     internal class Customer
     {
-        private string firstName;
-        private string lastName;
-        private string phno;
-        private List<string> favoriteFlavors;
+        private string? firstName;
+        private string? lastName;
+        private string? phno;
+        private List<string>? favoriteFlavors;
 
-        public string Firstname { get => firstName; set => firstName = value; }
-        public string Lastname { get => lastName; set => lastName = value; }
-        public string Phno { get => phno; set => phno = value; }
-        public List<string> FavoriteFlavors { get => favoriteFlavors; set => favoriteFlavors = value; }
+        public string? Firstname { get => firstName; set => firstName = value; }
+        public string? Lastname { get => lastName; set => lastName = value; }
+        public string? Phno { get => phno; set => phno = value; }
+        public List<string>? FavoriteFlavors { get => favoriteFlavors; set => favoriteFlavors = value; }
 
         public Customer(string fName, string lName, string phno, List<string> favoriteFlavors)
         {
