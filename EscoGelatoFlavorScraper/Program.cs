@@ -25,44 +25,81 @@ using System.Reflection;
 
 namespace EscoGelatoFlavorScraper
 {
+    /// <summary>
+    ///     EscoGelato posts their in-stock flavors on their website.  This program scrapes that flavor
+    ///     posting data and alerts users via text messege if their favorite flavors are in-stock.
+    /// </summary>
+    /// <issues>
+    ///     *Ensure that resources are properly disposed of (database connection + webdriver dependencies)
+    ///     **EscoGelato is rebuilding their website => need to switch to local website for testing => isLatestFlavorPosting will always return true
+    ///     *Refactor code
+    /// </issues>
+    /// <changes>
+    ///     *Added comments, migrated to use of "Chrome For Testing" browser, expanded the SetUpBrowser method, forced isLatestFlavorPosting to return true, removed CreateDbConnector
+    /// </changes>>
+    /// <todo>
+    ///     *implement Twilio reporting feature
+    ///     *setup a scheduler to run this program once a day or so.
+    ///     *Add logging to the exitprogram method
+    ///     *Add parameter to ExitProgram Method to close DB connection
+    ///     *seperate business logic from methods, no hard-coded data in methods.
+    /// </todo>
     class Program
     {
-        //---It might be good to chuck the code of Main into a class and call that object in main.
         //---Should chuck an Exception Catch around methods in Main method and ditch the if-else blocks
-        //---At this time app will not import customer flavor data from DB or file.  (personal use sofar)
         //---Perhaps add an Admin User that get's alerts if "isWellFormedFlavorPosting" is a "close-call".
         //---Consider adding Google Analytics to track app statistics and soforth.
         static void Main()
         {
+            string? dbServerEndpoint = Environment.GetEnvironmentVariable("EscoGelato_DB_Endpoint");
+            string? dbServerPortNum = Environment.GetEnvironmentVariable("EscoGelato_DB_Port");
+            string? dbName = Environment.GetEnvironmentVariable("EscoGelato_DB_Name");
+            string? userName = Environment.GetEnvironmentVariable("EscoGelato_DB_UserName");
+            string? userPassword = Environment.GetEnvironmentVariable("EscoGelato_DB_Password");
+            
+            MyDbConnectionClass DbConnection = new MyDbConnectionClass(dbServerEndpoint, dbName,
+                userName, userPassword, dbServerPortNum);
 
-            MyDbConnectionClass DbConnection = CreateDbConnector();
             DbConnection.IsConnect();
 
             List<(string, string)> allFlavorNames = QueryForFlavors(DbConnection);
 
-            IWebDriver browserDriver = new ChromeDriver();
-            SetUpBrowser(browserDriver);
+            IWebDriver browserDriver = SetUpBrowser("C:\\Users\\zaggn\\OneDrive\\Desktop\\chrome-win64\\chrome.exe",
+                "file:///C:/Users/zaggn/OneDrive/Desktop/SOFTWARE%20TESTING/EscoGelato/EscoGelato%20%E2%80%93%20Gelato,%20Coffee%20&%20Panini%20in%20downtown%20Escondido.html");
+            
             string postedMessege = GetPostedMessage(browserDriver);
 
+            //islatestFlavorPosting will always return True as of now.
             if (!isLatestFlavorPosting(browserDriver) || !isWellFormedFlavorPosting(postedMessege))
+                //just add the DB close inside he ExitProgram Method as argument
                 exitProgram(browserDriver);
             else
             {
-                //UpdateLatestFlavorPostingDate(the new date);
+                //Add UpdateLatestFlavorPostingDate(the new date) method;
+
                 List<string> flavorsInStock = ExtractFlavorsFromPosting(
                     FormatFlavorPostedData(postedMessege), 
                     FormatImportedAllFlavorsNameSet(allFlavorNames));
 
                 //Query for Phno's and Fav Flavors using flavorsInStock, (place into objects that go into List)
                 //firstname, favorite flavors in stock, phno.
-                List<Tuple<string, List<string>, string>> CustomersToAlert = QueryForCustomersToAlert(flavorsInStock, DbConnection);
+                List<Tuple<string, List<string>, string>> CustomersAndFlavorsForAlerting = QueryForCustomersToAlert(flavorsInStock, DbConnection);
 
-                //iterate through the customer list and send texts.
+                //iterate through the customer list and send texts (including what favorite flavor names of theirs are instock).
+
+                //clean and tear down program (close DB connection and exit browser(s)).
+                //just add the DB close inside he ExitProgram Method as argument
                 DbConnection.Close();
                 exitProgram(browserDriver);
             }
         }
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="flavorsInStock"></param>
+        /// <param name="dbConnection"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         private static List<Tuple<string, List<string>, string>> QueryForCustomersToAlert(List<string> flavorsInStock, MyDbConnectionClass dbConnection)
         {
             string CustName = "";
@@ -72,9 +109,9 @@ namespace EscoGelatoFlavorScraper
 
             //write the string query using this methods parameters
             using var sqlcommand = new MySqlCommand("", dbConnection.Connection);
-            using var sqlreader = sqlcommand.ExecuteReader();
 
             //run the query and return its result
+            using var sqlreader = sqlcommand.ExecuteReader();
 
             //iterate through result set and "combine" similar elements
 
@@ -84,30 +121,12 @@ namespace EscoGelatoFlavorScraper
         }
 
         /// <summary>
-        /// grabs the string literals from this computers environment variables and creates a
-        /// connection to the AWS Database for Escogelatoflavorscraper app.  Environmental
-        /// variables are used to protect the passwords and other sensitive data from the public.
-        /// </summary>
-        /// <returns></returns>
-        public static MyDbConnectionClass CreateDbConnector()
-        {
-            string? myserver = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_URL_ENDPOINT");
-            string? mylogin = Environment.GetEnvironmentVariable("AWS_EscoGelato_Login_Username");
-            string? mypass = Environment.GetEnvironmentVariable("AWS_EscoGelato_Login_Password");
-            string? mydatabase = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_Name");
-            string? myPort = Environment.GetEnvironmentVariable("AWS_EscoGelato_DB_URL_Port");
-            MyDbConnectionClass Connection = new MyDbConnectionClass(myserver, mydatabase, mylogin, mypass, myPort);
-            return Connection;
-        }
-
-        /// <summary>
         /// Gets the date and time of the latest flavor posting recorded by this program.  a file
         /// is used to keep this data persistant as this app quits.
         /// </summary>
         /// <returns></returns>
         public static DateTime? GetLatestFlavorPostingDate()
         {
-
             try
             {
                 string? LatestFlavorPostingRecordedFileDirectory = Environment.GetEnvironmentVariable("LatestFlavorPostingDateFile");
@@ -117,7 +136,6 @@ namespace EscoGelatoFlavorScraper
                 {
                     using (StreamReader sr = new StreamReader(LatestFlavorPostingRecordedFileDirectory))
                     {
-                        //need to ensure sr isn't null
                         string? line = sr.ReadLine();
                         return DateTime.Parse(line);
                     }
@@ -181,10 +199,11 @@ namespace EscoGelatoFlavorScraper
         /// afterwards.</todo>
         private static bool isLatestFlavorPosting(IWebDriver browserDriver)
         {
+            return true; 
 
             DateTime? dateOfLatestFlavorPosting = GetLatestFlavorPostingDate();
             DateTime dateOfAnnouncement = RetrieveAnnouncementDate(browserDriver);
-            return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
+            //return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
         }
         /// <summary>
         /// Gets the announcement posting from the business's website.
@@ -197,31 +216,21 @@ namespace EscoGelatoFlavorScraper
             return browserDriver.FindElement(By.XPath("/html/body/div[3]/b/section[2]/div[1]/main/div/" +
                 "div[2]/div/div/div/div/div/div/div[2]")).Text;
         }
-        /// <summary>
-        /// whitelisted "favorite" flavors
-        /// </summary>
-        /// <returns></returns>
-        /// <todo>should import customer data from DB or file</todo>
-        private static List<string> ImportFavoriteFlavors()
-        {
-            //throw new NotImplementedException();
-            List<string> favorites = 
-                new List<string> { "Chocolate", "Vanilla", "Strawberry", "Snickers", "Pecan"};
-            Customer hardcodedCustomer = new Customer("shane", "laskowski", "0123456789", favorites);
-            return (hardcodedCustomer.FavoriteFlavors);
-        }
+
         /// <summary>
         /// Ensure that this passes the argument by reference
         /// </summary>
         /// <param name="driver"></param>
         /// <exception cref="NotImplementedException"></exception>
-        static void SetUpBrowser(IWebDriver driver)
+        static IWebDriver SetUpBrowser(string browswerBinaryLoc, string URL)
         {
-            //"C:\Users\zaggn\OneDrive\Desktop\EscoGelato\EscoGelato – Gelato, Coffee & Panini
-            //in downtown Escondido.html"
-            //***the navigate string should be passed into this method, not hard-coded.
-            driver.Navigate().GoToUrl("file:///C:/Users/zaggn/OneDrive/Desktop/SOFTWARE%20TESTING/EscoGelato/EscoGelato%20%E2%80%93%20Gelato,%20Coffee%20&%20Panini%20in%20downtown%20Escondido.html");
-            driver.Manage().Window.Maximize();
+            ChromeOptions ch = new ChromeOptions();
+            ch.BinaryLocation = browswerBinaryLoc;
+            IWebDriver browserDriver = new ChromeDriver(ch);
+            browserDriver.Navigate().GoToUrl(URL);
+            browserDriver.Manage().Window.Maximize();
+
+            return browserDriver;
         }
 
         /// <summary>
@@ -249,7 +258,6 @@ namespace EscoGelatoFlavorScraper
             "div[1]/div/div/a/time"));
 
             dateOfAnnouncement = convertTwitterDateTextToDateTime(dateText.Text);
-            //dateOfAnnouncement = new DateTime();
 
             //return that datetime info
             return (dateOfAnnouncement);
@@ -276,17 +284,6 @@ namespace EscoGelatoFlavorScraper
                 " & date label.");
         }
 
-        /// <summary>
-        /// Retieves the posted annoucement text for future analysis
-        /// </summary>
-        /// <param name="driver">The interface that controls the webbrowser. 
-        /// Used to navigate webpages and retrieve data</param>
-        /// <returns>text of the annoucement in the form of IWebElement for analysis.</returns>
-        /// <exception cref="NotImplementedException"></exception>
-        static IWebElement RetrievePostedMessage(IWebDriver driver)
-        {
-            throw new NotImplementedException();
-        }
         /// <summary>
         /// To ensure that the announcement/posting is indeed a stocking update of flavors the
         /// text of the posting needs to be validated.  There is a chance that the annoucement
@@ -370,20 +367,21 @@ namespace EscoGelatoFlavorScraper
         ///  lower-case + remove spaces
         /// </summary>
         /// <param name="allFlavorNames"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        public static List<(string, string)> FormatImportedAllFlavorsNameSet(List<(string, string)> allFlavorNames)
+        /// <returns>A list of flavor names and associated alias names of flavor names.</returns>
+        /// <issue>allFlavorNames is having elements being replaced by other elements</issue>
+        public static List<(string, string)> FormatImportedAllFlavorsNameSet(List<(string, string)> flavors)
         {
             (string,string) flavorNamePair = ("", "");
             string officialFlavorName = "";
             string aliasFlavorName = "";
-            for(int i = 0; i < allFlavorNames.Count; i++)
+            List<(string, string)> allFlavorNames = new List<(string, string)>();
+
+            for(int i = 0; i < flavors.Count; i++)
             {
-                officialFlavorName = ReturnLowerCaseASCII(allFlavorNames[i].Item1.Replace(" ", ""));
-                aliasFlavorName = ReturnLowerCaseASCII(allFlavorNames[i].Item2.Replace(" ", ""));
-                flavorNamePair = (officialFlavorName, aliasFlavorName); //MUST be sure that item1 is officialname and not item2
+                officialFlavorName = ReturnLowerCaseASCII(flavors[i].Item1.Replace(" ", ""));
+                aliasFlavorName = ReturnLowerCaseASCII(flavors[i].Item2.Replace(" ", ""));
+                flavorNamePair = (officialFlavorName, aliasFlavorName);
                 allFlavorNames.Add(flavorNamePair);
-                allFlavorNames.RemoveAt(0);
             }
             return allFlavorNames;
         }
@@ -394,19 +392,26 @@ namespace EscoGelatoFlavorScraper
         /// <param name="flavorPosting">Flavor announcement of the newly instock flavors</param>
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
-        /// <todo>Remove Emojis And rename Flavor-Name Aliases</todo>
+        /// <todo>Remove Emojis And rename Flavor-Name Aliases, optimize the algorithm</todo>
+        /// <issues>
+        /// This method is returning multiple Repeated flavor names
+        /// in everyFlavorName i spotted repeated flavors in the list ex: "vanilla, creamyvanilla"
+        /// consider possiablity of postedFlavors containing a "" value
+        /// </issues>
         static List<string> ExtractFlavorsFromPosting(List<string> postedFlavors, List<(string, string)> everyFlavorName)
         {
             List<string> RecognizedFlavors = new List<string>();
-            foreach(var ef in everyFlavorName)
+            foreach (var flavor in postedFlavors)
             {
-                foreach(var flavor in postedFlavors)
+                foreach(var ef in everyFlavorName)
                 {
                     if (flavor == ef.Item1 || flavor == ef.Item2)
+                    {
                         RecognizedFlavors.Add(ef.Item1);
+                        break;
+                    }
                 }
             }
-
             return RecognizedFlavors;
         }
         /// <summary>
