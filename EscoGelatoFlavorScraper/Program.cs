@@ -9,7 +9,9 @@ using System.Text.RegularExpressions;
 using MySqlConnector;
 using System.Data.Common;
 using System.IO;
+
 using System.Reflection;
+using System.Runtime.InteropServices;
 /// <author> Shane Laskowski</author>
 /// <summary>
 /// This program is a webscraper that upon collecting data from twitter, sends a SMS text alert to a
@@ -35,11 +37,12 @@ namespace EscoGelatoFlavorScraper
     ///     *Refactor code
     /// </issues>
     /// <changes>
-    ///     *Added comments, migrated to use of "Chrome For Testing" browser, expanded the SetUpBrowser method, forced isLatestFlavorPosting to return true, removed CreateDbConnector
+    /// * reworked and added string builder method, implemented QueryForCustomersToAlert method, changed the xpath-ing to be relative, revised comments
     /// </changes>>
     /// <todo>
+    ///     *Some methods should have dependencies injected: like file directories (line 200)
     ///     *implement Twilio reporting feature
-    ///     *setup a scheduler to run this program once a day or so.
+    ///     *setup a scheduler to run this program weekly
     ///     *Add logging to the exitprogram method
     ///     *Add parameter to ExitProgram Method to close DB connection
     ///     *seperate business logic from methods, no hard-coded data in methods.
@@ -56,34 +59,30 @@ namespace EscoGelatoFlavorScraper
             string? dbName = Environment.GetEnvironmentVariable("EscoGelato_DB_Name");
             string? userName = Environment.GetEnvironmentVariable("EscoGelato_DB_UserName");
             string? userPassword = Environment.GetEnvironmentVariable("EscoGelato_DB_Password");
+            string? driverExecutable = Environment.GetEnvironmentVariable("Driver_Executable_Directory");
+            string? EscoGelatoURL = Environment.GetEnvironmentVariable("EscoGelatoURL");
             
             MyDbConnectionClass DbConnection = new MyDbConnectionClass(dbServerEndpoint, dbName,
                 userName, userPassword, dbServerPortNum);
-
             DbConnection.IsConnect();
-
             List<(string, string)> allFlavorNames = QueryForFlavors(DbConnection);
-
-            IWebDriver browserDriver = SetUpBrowser("C:\\Users\\zaggn\\OneDrive\\Desktop\\chrome-win64\\chrome.exe",
-                "file:///C:/Users/zaggn/OneDrive/Desktop/SOFTWARE%20TESTING/EscoGelato/EscoGelato%20%E2%80%93%20Gelato,%20Coffee%20&%20Panini%20in%20downtown%20Escondido.html");
-            
+            IWebDriver browserDriver = SetUpBrowser(driverExecutable, EscoGelatoURL);
             string postedMessege = GetPostedMessage(browserDriver);
 
-            //islatestFlavorPosting will always return True as of now.
+            //islatestFlavorPosting will always return True as of now: cant get exact time of posting.
             if (!isLatestFlavorPosting(browserDriver) || !isWellFormedFlavorPosting(postedMessege))
                 //just add the DB close inside he ExitProgram Method as argument
                 exitProgram(browserDriver);
             else
             {
                 //Add UpdateLatestFlavorPostingDate(the new date) method;
-
                 List<string> flavorsInStock = ExtractFlavorsFromPosting(
                     FormatFlavorPostedData(postedMessege), 
                     FormatImportedAllFlavorsNameSet(allFlavorNames));
 
                 //Query for Phno's and Fav Flavors using flavorsInStock, (place into objects that go into List)
                 //firstname, favorite flavors in stock, phno.
-                List<Tuple<string, List<string>, string>> CustomersAndFlavorsForAlerting = QueryForCustomersToAlert(flavorsInStock, DbConnection);
+                Dictionary<Customer, List<string>> CustomersAndFlavorsForAlerting = QueryForCustomersToAlert(flavorsInStock, DbConnection);
 
                 //iterate through the customer list and send texts (including what favorite flavor names of theirs are instock).
 
@@ -93,38 +92,108 @@ namespace EscoGelatoFlavorScraper
                 exitProgram(browserDriver);
             }
         }
+
         /// <summary>
-        /// 
+        /// Creates a database query based on the flavors that are instock, executes that query,
+        /// and returns the result set in a data structure which is used to send messages to customers.
+        /// This data is used to communicate with the customer's that their favorite flavors are instock.
         /// </summary>
-        /// <param name="flavorsInStock"></param>
-        /// <param name="dbConnection"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        private static List<Tuple<string, List<string>, string>> QueryForCustomersToAlert(List<string> flavorsInStock, MyDbConnectionClass dbConnection)
+        /// <param name="flavorsInStock"> a collection of flavors names, either their "real" names 
+        ///     or one of their designated aliases, that are instock</param>
+        /// <param name="dbConnection">The database object used to facilitate communication to the database</param>
+        /// <returns> A list of Customers with their favorite flavors that are in stock.</returns>
+        private static Dictionary<Customer, List<string>> QueryForCustomersToAlert(List<string> flavorsInStock, MyDbConnectionClass dbConnection)
         {
-            string CustName = "";
-            List<string> FavoriteFlavorsInstock = new List<string>();
-            string phno = "";
-            var custToAlert = new List<Tuple<string, List<string>, string>>();
+            var custToAlert = new Dictionary<Customer, List<string>>();
 
-            //write the string query using this methods parameters
-            using var sqlcommand = new MySqlCommand("", dbConnection.Connection);
-
-            //run the query and return its result
+            string dbQuery = BuildQueryCustomerFavFlavorInstock(flavorsInStock);            
+            using var sqlcommand = new MySqlCommand(dbQuery, dbConnection.Connection);
             using var sqlreader = sqlcommand.ExecuteReader();
 
-            //iterate through result set and "combine" similar elements
+            custToAlert = ParseCustomerFavFlavorInstockQuery(sqlreader);
+            return custToAlert;
+        }
+        /// <summary>
+        /// Iterates through the result of a set of database records of customers and their instock
+        /// favorite flavors.  Then it places the result set into an easy to work with data structure.
+        /// this data is used to communicate with the customer's that their favorite flavors are instock.
+        /// </summary>
+        /// <param name="sqlreader">contains result set from an executed database query of 
+        ///     customers and a single instock flavor associated with that customer</param>
+        /// <issue>Optional: remove the LoadCustFlavorQueryIntoList method and just rework this 
+        ///     method's algorithm to accomplish its goal.  this will reduce amount of code by a bit.</issue>
+        /// <returns>a Dictionary object of Customers and their favorite flavors that are instock</returns>
+        private static Dictionary<Customer, List<string>> ParseCustomerFavFlavorInstockQuery(MySqlDataReader sqlreader)
+        {
 
-            //return custToAlert
+            List<(Customer, string)> custAndOneInstockFavFlavor =
+                LoadCustFlavorQueryIntoList(sqlreader);
 
-            throw new NotImplementedException();
+            Dictionary<Customer, List<string>> customersFavFlavorsInstock = 
+                new Dictionary<Customer, List<string>>();
+
+            foreach((Customer, string) cF in custAndOneInstockFavFlavor)
+            {
+                if (!customersFavFlavorsInstock.ContainsKey(cF.Item1))
+                    customersFavFlavorsInstock.Add(cF.Item1, new List<string>());
+            }
+            foreach ((Customer, string) cF in custAndOneInstockFavFlavor)
+            {
+                customersFavFlavorsInstock[cF.Item1].Add(cF.Item2);
+            }
+            return customersFavFlavorsInstock;
+        }
+        /// <summary>
+        /// This method reads the result set of the database query and places them into a data 
+        /// structure.
+        /// </summary>
+        /// <param name="sqlreader">Contains the result set from DB query.  column values are 
+        ///     a customer's firstname and a single favorite flavor that is Instock</param>
+        /// <returns></returns>
+        private static List<(Customer, string)> LoadCustFlavorQueryIntoList(MySqlDataReader sqlreader)
+        {
+            List<(Customer, string)> loadedCustFlavorData = new List<(Customer, string)>();
+           (Customer, string) tempCustAndFlavor;
+            while (sqlreader.Read())
+            {
+                tempCustAndFlavor = new(new Customer(sqlreader.GetString(0),
+                    sqlreader.GetString(1)), sqlreader.GetString(2));
+                loadedCustFlavorData.Add(tempCustAndFlavor);
+            }
+            return loadedCustFlavorData;
         }
 
         /// <summary>
-        /// Gets the date and time of the latest flavor posting recorded by this program.  a file
-        /// is used to keep this data persistant as this app quits.
+        /// Builds a comma seperated flavor listing that is placed in SQL query string.  This 
+        /// query, once executed, should return a result set of two columns: customer's firstname 
+        /// and one favorite flavor of theirs that is instock.  there is likeyhood that customers
+        /// have more than one favorite flavor instock => multiple records of a single customer
+        /// will be shown but with different flavors.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="flavorsInStock">a string List of instock flavors</param>
+        /// <returns>a query string in which favorite flavors instock and customers will in the
+        /// result set.</returns>
+        private static string BuildQueryCustomerFavFlavorInstock(List<string> flavorsInStock)
+        {
+            StringBuilder formattedFlavorList = new StringBuilder();
+            formattedFlavorList.Append("SELECT firstName, phno, favoriteFlavorName FROM " +
+                "JuncCustFavFlavor WHERE REPLACE(LOWER(favoriteFlavorName), ' ', '') IN " +
+                "(");
+            foreach(string flavor in flavorsInStock)
+            {
+                formattedFlavorList.Append($"\'{flavor}\',");
+            }
+            formattedFlavorList.Remove(formattedFlavorList.Length - 1, 1);//removes the trailing ','
+            formattedFlavorList.Append(") ORDER BY firstName, phno;");
+            return formattedFlavorList.ToString();
+        }
+
+        /// <summary>
+        /// Gets the date and time of the latest flavor posting.  a file
+        /// is used to keep this data persistant once this app quits.
+        /// </summary>
+        /// <returns>Datetime object of when the last time the flavor posting that was recorded by
+        ///     this program was presented to the public</returns>
         public static DateTime? GetLatestFlavorPostingDate()
         {
             try
@@ -151,7 +220,9 @@ namespace EscoGelatoFlavorScraper
 
         /// <summary>
         /// Updates the new flavor posting date discovered by this app.  It doesnt append but
-        /// creates a new names.txt, overwriting it with the new date text.
+        /// creates a new flavor names text file, overwriting the existing text file with the
+        /// new date text file.  This data is presistent and won't be erased once this program
+        /// quits.
         /// </summary>
         public static void UpdateLatestFlavorPostingDate(string newDate)
         {
@@ -164,7 +235,7 @@ namespace EscoGelatoFlavorScraper
         /// <summary>
         /// Querys the Database for all flavor names, both official and alias names.
         /// </summary>
-        /// <param name="dataBaseConnection"></param>
+        /// <param name="dataBaseConnection">database object used to facilitate communication</param>
         /// <returns>a list of the flavor names in the form of tuples consisting of two strings, (official, alias)</returns>
         public static List<(string, string)> QueryForFlavors(MyDbConnectionClass dataBaseConnection)
         {
@@ -199,18 +270,18 @@ namespace EscoGelatoFlavorScraper
         /// afterwards.</todo>
         private static bool isLatestFlavorPosting(IWebDriver browserDriver)
         {
-            return true; 
 
             DateTime? dateOfLatestFlavorPosting = GetLatestFlavorPostingDate();
             DateTime dateOfAnnouncement = RetrieveAnnouncementDate(browserDriver);
-            //return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
+            return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
         }
         /// <summary>
-        /// Gets the announcement posting from the business's website.
+        /// Gets the announcement posting from the business's website.  this announcement message
+        /// may or may not be an announcement for current flavors instock.
         /// </summary>
-        /// <param name="browserDriver"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
+        /// <param name="browserDriver">Selenium Webdriver used to manipulate and examine 
+            /// a webpage</param>
+        /// <returns>string representation of the text displayed to the public</returns>
         private static string GetPostedMessage(IWebDriver browserDriver)
         {
             return browserDriver.FindElement(By.XPath("/html/body/div[3]/b/section[2]/div[1]/main/div/" +
@@ -218,11 +289,12 @@ namespace EscoGelatoFlavorScraper
         }
 
         /// <summary>
-        /// Ensure that this passes the argument by reference
+        /// sets up the web browser, manipulated by Selenium Webdriver, for data collection and 
+        /// webpage manipulation.
         /// </summary>
         /// <param name="driver"></param>
-        /// <exception cref="NotImplementedException"></exception>
-        static IWebDriver SetUpBrowser(string browswerBinaryLoc, string URL)
+        /// <todo>pass arguments by reference?</todo>
+        static IWebDriver SetUpBrowser(string? browswerBinaryLoc, string? URL)
         {
             ChromeOptions ch = new ChromeOptions();
             ch.BinaryLocation = browswerBinaryLoc;
@@ -234,11 +306,12 @@ namespace EscoGelatoFlavorScraper
         }
 
         /// <summary>
-        /// Grabs the dates of the latest postings on the announcement feed.  Need to add the 
-        /// amount of postings grabbed.
+        /// Gets the date and time when a instock announcement of flavors is posted to the public.
         /// </summary>
         /// <param name="driver"></param>
-        /// <returns></returns>
+        /// <issues>should not hard code in xpaths, pass it as argument.
+        ///     should use explicit waits. </issues>
+        /// <returns>DateTime of flavor posting to public</returns>
         static DateTime RetrieveAnnouncementDate(IWebDriver driver)
         {
             DateTime dateOfAnnouncement;
@@ -253,18 +326,15 @@ namespace EscoGelatoFlavorScraper
 
             //locate the label with info of time and date of the posting
             IWebElement dateText =
-            driver.FindElement(By.XPath("/html/body/div[1]/div/div/div[2]/main/div/div/div/" +
-            "div/div/section/div/div/div[1]/div/div/article/div/div/div[3]/div[5]/div/" +
-            "div[1]/div/div/a/time"));
+            driver.FindElement(By.XPath("//*/article/*//time"));
 
             dateOfAnnouncement = convertTwitterDateTextToDateTime(dateText.Text);
 
-            //return that datetime info
             return (dateOfAnnouncement);
         }
         /// <summary>
-        /// Converts the specific format Twitter uses for their timestamp of a twitter posting
-        /// from a string to a DateTime object.  Will be used to determine if the post being
+        /// Converts the specific format Twitter uses for their timestamp of a twitter posting.
+        /// Converts it from a string to a DateTime object.  Will be used to determine if the post being
         /// analyzed is in-fact the latest announcement.
         /// </summary>
         /// <param name="dateText"></param>
@@ -287,10 +357,11 @@ namespace EscoGelatoFlavorScraper
         /// <summary>
         /// To ensure that the announcement/posting is indeed a stocking update of flavors the
         /// text of the posting needs to be validated.  There is a chance that the annoucement
-        /// feed might be used for postings unrelated to flavor postings.
+        /// feed might be used for postings unrelated to flavor postings, this method should
+        /// determine this.
         /// </summary>
         /// <param name="messagePosted"></param>
-        /// <returns></returns>
+        /// <returns>bool value indicating if the flavor posting is indeed a flavor posting</returns>
         /// <exception cref="NotImplementedException"></exception>
         static bool isWellFormedFlavorPosting(string messagePosted)
         {
@@ -324,10 +395,11 @@ namespace EscoGelatoFlavorScraper
             return true;
         }
         /// <summary>
-        /// 
+        /// simply checks string input for any mentioning of a Month.  used to help verfiy the
+        /// characteristics of a posting announcement in other methods.
         /// </summary>
         /// <param name="inputText"></param>
-        /// <returns></returns>
+        /// <returns>true if string has a month somewhere in its text, otherwise false.</returns>
         private static bool containsOneMonthStringText(string inputText)
         {
             string[] months = { "january", "february", "march", "april", "may", "june", "july",
@@ -342,10 +414,13 @@ namespace EscoGelatoFlavorScraper
             return (numMonthsCount == 1 ? true : false);
         }
         /// <summary>
-        /// 
+        /// reads the extracted flavor posting announcement text, gets rid of unncessary characters 
+        /// such as emojis, and places each line of text into a datastructure.  the goal is to
+        /// "trim the fat" from the text to make it easier to extract which flavors are instock.
         /// </summary>
         /// <param name="postedFlavorMessege"></param>
-        /// <returns></returns>
+        /// <returns>a List of strings which are each salient line of the announcmenent of instock
+        ///     flavor posting</returns>
         public static List<string> FormatFlavorPostedData(string postedFlavorMessege)
         {
             List<string> flavors = postedFlavorMessege.Split("\n").ToList();
@@ -364,9 +439,13 @@ namespace EscoGelatoFlavorScraper
             return flavors;
         }
         /// <summary>
-        ///  lower-case + remove spaces
+        /// formats strings to all have the same likeness, such as being all lower-case and with
+        /// no spaces.
         /// </summary>
-        /// <param name="allFlavorNames"></param>
+        /// <param name="allFlavorNames">a list of (string, string) tuples which should all be
+        /// flavors, specifically an alias for a flavor name paired with the actual real name of
+        /// that flavor alias.  it might be the case that both values of a tuple are real flavor
+        /// names.</param>
         /// <returns>A list of flavor names and associated alias names of flavor names.</returns>
         /// <issue>allFlavorNames is having elements being replaced by other elements</issue>
         public static List<(string, string)> FormatImportedAllFlavorsNameSet(List<(string, string)> flavors)
@@ -387,7 +466,10 @@ namespace EscoGelatoFlavorScraper
         }
 
         /// <summary>
-        /// Extracts the flavor strings mentioned inside the posting text
+        /// Extracts the flavor strings mentioned inside the posting text.  each supposed flavor
+        /// string taken from the instock flavor posting announcement is checked against a tuple
+        /// object of Real and Alias flavor names.  This verifies that the returned collection of
+        /// posted instock flavor names only costist of actual flavor names.
         /// </summary>
         /// <param name="flavorPosting">Flavor announcement of the newly instock flavors</param>
         /// <returns></returns>
@@ -415,7 +497,8 @@ namespace EscoGelatoFlavorScraper
             return RecognizedFlavors;
         }
         /// <summary>
-        /// 
+        /// takes a string and returns a lower case version of it.  used in the program to keep
+        /// flavor names in the same format for string comparison.
         /// </summary>
         /// <param name="s"></param>
         /// <returns>similar input string but its lower case and removes non-Alphabetical chars
@@ -434,8 +517,8 @@ namespace EscoGelatoFlavorScraper
             return sb.ToString();
         }
         /// <summary>Determines which, if any, favorite flavors are instock.</summary>
-        /// <param name="favoriteFlavors"></param>
-        /// <param name="flavorsInStock"></param>
+        /// <param name="favoriteFlavors">the complete list of all flavors in the Database</param>
+        /// <param name="flavorsInStock">the complete list of all announced flavors instock</param>
         /// <returns>A collection of flavors that are instock and on the favorite's list</returns>
         /// <exception cref="NotImplementedException"></exception>
         /// <todo>Consider using HashMap to reduce Time-Complexity.  Note that some flavors
@@ -468,10 +551,9 @@ namespace EscoGelatoFlavorScraper
         /// </summary>
         /// <param name="driver">An interface with the webbrowser.  The browser needs to when 
         /// program exits so that the resources are not taken up on the computer.</param>
-        /// <todo>May want to overload with exception parameter</todo>
+        /// <todo>May want to overload with exception parameter.</todo>
         static void exitProgram(IWebDriver driver)
         {
-
             driver.Close();
             driver?.Quit();
             //call logging fuctions here
