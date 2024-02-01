@@ -1,7 +1,7 @@
 Author: Shane Laskowski
-Keywords: C#, 6.0.NET, Selenium Webdriver, Twilio API
-Summary: This is a webscraper that takes data from a local business's twitter feed.  
-The Twiiter feed is expected to have postings of their daily flavors.  The problem 
-is that their faithful customer, me, doesn't feel like checking their twitter 
-feed everyday for my favorite flavors.  This app will text my phone when any of my favorite 
-flavors are available.
+Tech: C#, 6.0.NET, Selenium Webdriver, Twilio API, MySQL RDMS
+Summary: This application webscrapes a local business's website for their Twitter feed which
+contains their instock flavors for the week.  This data is then compared to a database of customers
+and a collection of those customers' favorite flavors.  Each customer that has a favorite flavor instock
+will then recieve a text message informing them that their favorite flavors are instock.  This solves an
+issue with customers not feeling inclined to check the company's Twitter feed often.
