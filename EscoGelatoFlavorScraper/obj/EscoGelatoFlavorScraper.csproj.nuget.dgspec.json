@@ -56,6 +56,10 @@
               "target": "Package",
               "version": "[4.8.0, )"
             },
+            "SeleniumExtras.WaitHelpers": {
+              "target": "Package",
+              "version": "[1.0.2, )"
+            },
             "Twilio": {
               "target": "Package",
               "version": "[6.2.2, )"

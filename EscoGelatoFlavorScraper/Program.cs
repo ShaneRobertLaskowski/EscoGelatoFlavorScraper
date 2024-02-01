@@ -1,6 +1,7 @@
 ﻿//these using directives can be added as global using directives in another file
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using SeleniumExtras.WaitHelpers; //for Webdriver 4.0 and up
 using OpenQA.Selenium.DevTools.V85.Debugger;
 using System.Globalization;
 using System.Net.Sockets;
@@ -12,6 +13,11 @@ using System.IO;
 
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
+using Twilio.TwiML.Messaging;
+using Twilio.Types;
+using OpenQA.Selenium.Support.UI;
 /// <author> Shane Laskowski</author>
 /// <summary>
 /// This program is a webscraper that upon collecting data from twitter, sends a SMS text alert to a
@@ -32,64 +38,83 @@ namespace EscoGelatoFlavorScraper
     ///     posting data and alerts users via text messege if their favorite flavors are in-stock.
     /// </summary>
     /// <issues>
-    ///     *Ensure that resources are properly disposed of (database connection + webdriver dependencies)
-    ///     **EscoGelato is rebuilding their website => need to switch to local website for testing => isLatestFlavorPosting will always return true
-    ///     *Refactor code
+    ///     Refactoring code needed.
+    ///     SQL statements expose some internals to public via GitHub
+    ///     There are now Restrictions on the use of Twilio's API (see their website).
     /// </issues>
     /// <changes>
-    /// * reworked and added string builder method, implemented QueryForCustomersToAlert method, changed the xpath-ing to be relative, revised comments
-    /// </changes>>
+    ///     added DbConnection to ExitProgram method to close connection there.
+    ///     passed LatestFlavorPostingDate as an argument to isLatestFlavorPosting method instead of hardcoding its value
+    ///     implemented UpdateLatestFlavorPostingDate method
+    ///     partially implemented Send Message method to all salient customers
+    ///     added TwilioConfigData and EscoGelatoDBConfig static data classes
+    ///     switched to Relative Pathing for xpath locators
+    ///     switched to Explicit waits for Selenium WebDriver
+    /// </changes>
     /// <todo>
-    ///     *Some methods should have dependencies injected: like file directories (line 200)
-    ///     *implement Twilio reporting feature
-    ///     *setup a scheduler to run this program weekly
-    ///     *Add logging to the exitprogram method
-    ///     *Add parameter to ExitProgram Method to close DB connection
-    ///     *seperate business logic from methods, no hard-coded data in methods.
+    ///     *Need to test more in regards to sending out proper messages to the appropriate customers.
+    ///     *fix the extra comma and spacing in the sent out text message alerts.
+    ///     *Add logging to the exitprogram method and other methods
     /// </todo>
     class Program
     {
         //---Should chuck an Exception Catch around methods in Main method and ditch the if-else blocks
-        //---Perhaps add an Admin User that get's alerts if "isWellFormedFlavorPosting" is a "close-call".
-        //---Consider adding Google Analytics to track app statistics and soforth.
         static void Main()
         {
-            string? dbServerEndpoint = Environment.GetEnvironmentVariable("EscoGelato_DB_Endpoint");
-            string? dbServerPortNum = Environment.GetEnvironmentVariable("EscoGelato_DB_Port");
-            string? dbName = Environment.GetEnvironmentVariable("EscoGelato_DB_Name");
-            string? userName = Environment.GetEnvironmentVariable("EscoGelato_DB_UserName");
-            string? userPassword = Environment.GetEnvironmentVariable("EscoGelato_DB_Password");
-            string? driverExecutable = Environment.GetEnvironmentVariable("Driver_Executable_Directory");
-            string? EscoGelatoURL = Environment.GetEnvironmentVariable("EscoGelatoURL");
-            
-            MyDbConnectionClass DbConnection = new MyDbConnectionClass(dbServerEndpoint, dbName,
-                userName, userPassword, dbServerPortNum);
-            DbConnection.IsConnect();
-            List<(string, string)> allFlavorNames = QueryForFlavors(DbConnection);
-            IWebDriver browserDriver = SetUpBrowser(driverExecutable, EscoGelatoURL);
-            string postedMessege = GetPostedMessage(browserDriver);
+            const string ANNOUNCEMENT_XPATH_LOC = "//*[@id=\"twitter-feed-EscoGelato\"]/div/div/div[2]/span[2]";
+            const string TIME_LABEL_XPATH = "//*[@id=\"twitter-feed-EscoGelato\"]/div/div/div[2]/span[1]/a";
+            const string DATETIME_LABEL_XPATH = "//*/article/*//time";
 
-            //islatestFlavorPosting will always return True as of now: cant get exact time of posting.
-            if (!isLatestFlavorPosting(browserDriver) || !isWellFormedFlavorPosting(postedMessege))
-                //just add the DB close inside he ExitProgram Method as argument
-                exitProgram(browserDriver);
+            string? EscoGelatoURL = Environment.GetEnvironmentVariable("EscoGelatoURL");
+            string? BrowserExecutable = 
+                Environment.GetEnvironmentVariable("Browser_Executable_Directory");
+            string? LatestFlavorPostingDateFileDirectory = 
+                Environment.GetEnvironmentVariable("LatestFlavorPostingDateFile");
+
+            MyDbConnectionClass DbConnection = new MyDbConnectionClass(
+                EscoGelatoDBConfig.DbServerEndpoint, EscoGelatoDBConfig.DbName,
+                EscoGelatoDBConfig.UserName, EscoGelatoDBConfig.UserPassword, 
+                EscoGelatoDBConfig.DbServerPortNum);
+            DbConnection.IsConnect();
+
+            List<(string, string)> allFlavorNames = QueryForFlavors(DbConnection);
+            IWebDriver browserDriver = SetUpBrowser(BrowserExecutable, EscoGelatoURL);
+            
+            //Should to pass Xpath as argument for this method.
+            string postedMessege = GetPostedMessage(browserDriver, ANNOUNCEMENT_XPATH_LOC);
+            //Program exits at this condition because the stored latest posting date is updated
+            //each time this program is run => edit the file before running or comment out
+            //UpdateLatestFlavorPostingDate
+            if (!isLatestFlavorPosting(browserDriver, LatestFlavorPostingDateFileDirectory,
+                TIME_LABEL_XPATH, DATETIME_LABEL_XPATH) || !isWellFormedFlavorPosting(postedMessege))
+            {
+                exitProgram(browserDriver, DbConnection);
+            }
             else
             {
-                //Add UpdateLatestFlavorPostingDate(the new date) method;
+                //For Testing purposes this file method will not be ran.
+                //the file will get updated with latest flavor date => won't run with
+                //same testing unupdated twitter feed.
+                //perhaps pass a bool Flag as an argument to disable this method
+                //instead of commenting it out
+                /*
+                browserDriver.SwitchTo().Window(browserDriver.WindowHandles[0]);
+                UpdateLatestFlavorPostingDate(RetrieveAnnouncementDate(browserDriver,
+                    TIME_LABEL_XPATH, DATETIME_LABEL_XPATH).ToString(), 
+                    LatestFlavorPostingDateFileDirectory);
+                */
                 List<string> flavorsInStock = ExtractFlavorsFromPosting(
-                    FormatFlavorPostedData(postedMessege), 
+                    FormatFlavorPostedData(postedMessege),
                     FormatImportedAllFlavorsNameSet(allFlavorNames));
 
-                //Query for Phno's and Fav Flavors using flavorsInStock, (place into objects that go into List)
-                //firstname, favorite flavors in stock, phno.
-                Dictionary<Customer, List<string>> CustomersAndFlavorsForAlerting = QueryForCustomersToAlert(flavorsInStock, DbConnection);
+                Dictionary<Customer, List<string>> CustomersAndFlavorsForAlerting =
+                    QueryForCustomersToAlert(flavorsInStock, DbConnection);
 
-                //iterate through the customer list and send texts (including what favorite flavor names of theirs are instock).
+                SendFavoriteFlavorStockingAlert(TwilioConfigData.TwilioUserName, 
+                    TwilioConfigData.TwilioSID, TwilioConfigData.TwilioSourcePhNo,
+                    TwilioConfigData.TwilioRegisteredPhNo, CustomersAndFlavorsForAlerting);
 
-                //clean and tear down program (close DB connection and exit browser(s)).
-                //just add the DB close inside he ExitProgram Method as argument
-                DbConnection.Close();
-                exitProgram(browserDriver);
+                exitProgram(browserDriver, DbConnection);
             }
         }
 
@@ -173,6 +198,7 @@ namespace EscoGelatoFlavorScraper
         /// <param name="flavorsInStock">a string List of instock flavors</param>
         /// <returns>a query string in which favorite flavors instock and customers will in the
         /// result set.</returns>
+        /// <issue>The SQL query exposes internals of the Database here which is displayed on GitHub</issue>
         private static string BuildQueryCustomerFavFlavorInstock(List<string> flavorsInStock)
         {
             StringBuilder formattedFlavorList = new StringBuilder();
@@ -183,7 +209,8 @@ namespace EscoGelatoFlavorScraper
             {
                 formattedFlavorList.Append($"\'{flavor}\',");
             }
-            formattedFlavorList.Remove(formattedFlavorList.Length - 1, 1);//removes the trailing ','
+            //removes the trailing ','
+            formattedFlavorList.Remove(formattedFlavorList.Length - 1, 1);
             formattedFlavorList.Append(") ORDER BY firstName, phno;");
             return formattedFlavorList.ToString();
         }
@@ -194,18 +221,18 @@ namespace EscoGelatoFlavorScraper
         /// </summary>
         /// <returns>Datetime object of when the last time the flavor posting that was recorded by
         ///     this program was presented to the public</returns>
-        public static DateTime? GetLatestFlavorPostingDate()
+        public static DateTime? GetLatestFlavorPostingDate(string? LatestFlavorPostingRecordedFileDirectory)
         {
             try
             {
-                string? LatestFlavorPostingRecordedFileDirectory = Environment.GetEnvironmentVariable("LatestFlavorPostingDateFile");
-                if (LatestFlavorPostingRecordedFileDirectory == "")
+                if (LatestFlavorPostingRecordedFileDirectory == null || LatestFlavorPostingRecordedFileDirectory == "")
                     throw new Exception("file directory not set");
                 else
                 {
                     using (StreamReader sr = new StreamReader(LatestFlavorPostingRecordedFileDirectory))
                     {
                         string? line = sr.ReadLine();
+                        //should do exception throwing here if line is null... tryParse.
                         return DateTime.Parse(line);
                     }
                 }
@@ -224,11 +251,14 @@ namespace EscoGelatoFlavorScraper
         /// new date text file.  This data is presistent and won't be erased once this program
         /// quits.
         /// </summary>
-        public static void UpdateLatestFlavorPostingDate(string newDate)
+        public static void UpdateLatestFlavorPostingDate(string newDate, string? postingDateTextFileName)
         {
-            using (StreamWriter sw = new StreamWriter("LatestOfficialFlavorPostingDate.txt", false))
+            if (postingDateTextFileName != null)
             {
+                using (StreamWriter sw = new StreamWriter(postingDateTextFileName, false))
+                {
                     sw.WriteLine(newDate);
+                }
             }
         }
 
@@ -268,11 +298,11 @@ namespace EscoGelatoFlavorScraper
         /// <todo>Should query all postings of the day from twitter feed to handle case
         /// of the business posting both a flavor annoucement and another unrelated annoucement 
         /// afterwards.</todo>
-        private static bool isLatestFlavorPosting(IWebDriver browserDriver)
+        private static bool isLatestFlavorPosting(IWebDriver browserDriver, 
+            string? LatestFlavorPostingDate, string timeLabelXpath, string dateTimeLabelXpath)
         {
-
-            DateTime? dateOfLatestFlavorPosting = GetLatestFlavorPostingDate();
-            DateTime dateOfAnnouncement = RetrieveAnnouncementDate(browserDriver);
+            DateTime? dateOfLatestFlavorPosting = GetLatestFlavorPostingDate(LatestFlavorPostingDate);
+            DateTime dateOfAnnouncement = RetrieveAnnouncementDate(browserDriver, timeLabelXpath, dateTimeLabelXpath);
             return (dateOfAnnouncement > dateOfLatestFlavorPosting ? true : false);
         }
         /// <summary>
@@ -282,10 +312,11 @@ namespace EscoGelatoFlavorScraper
         /// <param name="browserDriver">Selenium Webdriver used to manipulate and examine 
             /// a webpage</param>
         /// <returns>string representation of the text displayed to the public</returns>
-        private static string GetPostedMessage(IWebDriver browserDriver)
+        private static string GetPostedMessage(IWebDriver browserDriver, string xPathLoc)
         {
-            return browserDriver.FindElement(By.XPath("/html/body/div[3]/b/section[2]/div[1]/main/div/" +
-                "div[2]/div/div/div/div/div/div/div[2]")).Text;
+            ////*[@id="twitter-feed-EscoGelato"]/div/div/div[2]/span[2]
+            ////*[@id="twitter - feed - EscoGelato"]/div/div/div[2]
+            return browserDriver.FindElement(By.XPath(xPathLoc)).Text;
         }
 
         /// <summary>
@@ -309,24 +340,22 @@ namespace EscoGelatoFlavorScraper
         /// Gets the date and time when a instock announcement of flavors is posted to the public.
         /// </summary>
         /// <param name="driver"></param>
-        /// <issues>should not hard code in xpaths, pass it as argument.
-        ///     should use explicit waits. </issues>
+        /// <param name="timeLabelXpath">location of a hyperlink which leads to Twitter's
+        ///     site</param>
+        /// <param name="dateTimeLabelXpath">Location of a label which bears a more descriptive 
+        ///     time of the announcement posting</param>
+        /// <issues></issues>
         /// <returns>DateTime of flavor posting to public</returns>
-        static DateTime RetrieveAnnouncementDate(IWebDriver driver)
+        static DateTime RetrieveAnnouncementDate(IWebDriver driver, string timeLabelXpath, 
+            string dateTimeLabelXpath)
         {
             DateTime dateOfAnnouncement;
 
-            //click on the href link label of the posting time
-            driver.FindElement(By.XPath("/html/body/div[3]/b/section[2]/div[1]/main/div/div[2]/" +
-                "div/div/div/div/div/div/div[2]/span[1]/a")).Click();
+            driver.FindElement(By.XPath(timeLabelXpath)).Click();
             driver.SwitchTo().Window(driver.WindowHandles[1]);
 
-            //add an explicit wait here here!!!!!!!!!!!!!!
-            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(30);
-
-            //locate the label with info of time and date of the posting
-            IWebElement dateText =
-            driver.FindElement(By.XPath("//*/article/*//time"));
+            var wait = new WebDriverWait(driver, new TimeSpan(0, 0, 20));
+            IWebElement dateText = wait.Until(ExpectedConditions.ElementIsVisible(By.XPath(dateTimeLabelXpath)));
 
             dateOfAnnouncement = convertTwitterDateTextToDateTime(dateText.Text);
 
@@ -537,14 +566,42 @@ namespace EscoGelatoFlavorScraper
         /// <summary>
         /// Sends a Text message using the Twilio API to alert a user that atleast one of their
         /// favorite flavors are instock.  The user will then be super happy that to know this
-        /// information.
+        /// information.  NOTICE: an exception is automatically thrown here to prevent this potentially
+        /// costly API from running as well as an "if" conditional to prevent the API's account being
+        /// charged while testing.
         /// </summary>
-        /// <param name="instockFavorites"></param>
-        /// <todo>Need to import user data and not just hardcode my contact info.</todo>
-        /// <exception cref="NotImplementedException"></exception>
-        static void SendFavoriteFlavorStockingAlert(List<string> instockFavorites)
+        /// <param name="CustomersAndTheirInstockFlavors">A Dictionary containing Customers Objects
+        ///     and all their respective favorite flavors that are instock.</param>
+        static void SendFavoriteFlavorStockingAlert(string? twilioUser, string? twilioPass,
+            string? twilioPhNo, string? twilioRegisteredPhNo,
+            Dictionary<Customer, List<string>> CustomersAndTheirInstockFlavors)
         {
             throw new NotImplementedException();
+            
+            TwilioClient.Init(twilioUser, twilioPass);
+            StringBuilder s = new StringBuilder();
+            foreach(KeyValuePair<Customer, List<string>> cF in CustomersAndTheirInstockFlavors)
+            {
+                s.Append("Greetings " + cF.Key.Firstname + ",\ryour favorite flavor(s) ");
+                foreach(string flavor in cF.Value)
+                {
+                    s.Append(flavor + ", ");
+                }
+                //s.Remove(s.Length - 1, 1); //remove the extra ' ' character
+                s.Append(" are in stock at Escogelato !!!");
+
+                Console.WriteLine(s.ToString());
+                //Restriction communication only to twilioRegisteredPhNo (for testing purposes)
+                if (cF.Key.Phno == twilioRegisteredPhNo)
+                {
+                    var messageOptions = new CreateMessageOptions(new PhoneNumber(cF.Key.Phno));
+                    messageOptions.From = new PhoneNumber(twilioPhNo);
+                    messageOptions.Body = s.ToString();
+                    var newMessage = MessageResource.Create(messageOptions);
+                }
+                s.Clear();
+            }
+
         }
         /// <summary>
         /// Exits the program!
@@ -552,8 +609,9 @@ namespace EscoGelatoFlavorScraper
         /// <param name="driver">An interface with the webbrowser.  The browser needs to when 
         /// program exits so that the resources are not taken up on the computer.</param>
         /// <todo>May want to overload with exception parameter.</todo>
-        static void exitProgram(IWebDriver driver)
+        static void exitProgram(IWebDriver driver, MyDbConnectionClass db)
         {
+            db.Close();
             driver.Close();
             driver?.Quit();
             //call logging fuctions here

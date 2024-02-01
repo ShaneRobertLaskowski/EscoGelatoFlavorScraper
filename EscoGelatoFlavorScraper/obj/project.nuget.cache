@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "6EXbLYnEF5MXJuCxJAUq0NfKzzRKHfsGWzP0OCnFLNnWHqiXwSHnz/b2pur7RSm+15mGfrtCFj5/RsewH/ztiQ==",
+  "dgSpecHash": "XL4Lu5zMUKbsG6eRNpgsBtbumZPh2cImwpJ75T/lHyMi+4ejXJK0fu6uA4AeYe8hvnH96FDDygRY0pyZoqbNfg==",
   "success": true,
   "projectFilePath": "C:\\Users\\zaggn\\source\\repos\\EscoGelatoFlavorScraper\\EscoGelatoFlavorScraper\\EscoGelatoFlavorScraper.csproj",
   "expectedPackageFiles": [
@@ -16,6 +16,7 @@
     "C:\\Users\\zaggn\\.nuget\\packages\\newtonsoft.json\\13.0.1\\newtonsoft.json.13.0.1.nupkg.sha512",
     "C:\\Users\\zaggn\\.nuget\\packages\\selenium.support\\4.8.0\\selenium.support.4.8.0.nupkg.sha512",
     "C:\\Users\\zaggn\\.nuget\\packages\\selenium.webdriver\\4.8.0\\selenium.webdriver.4.8.0.nupkg.sha512",
+    "C:\\Users\\zaggn\\.nuget\\packages\\seleniumextras.waithelpers\\1.0.2\\seleniumextras.waithelpers.1.0.2.nupkg.sha512",
     "C:\\Users\\zaggn\\.nuget\\packages\\system.collections.nongeneric\\4.3.0\\system.collections.nongeneric.4.3.0.nupkg.sha512",
     "C:\\Users\\zaggn\\.nuget\\packages\\system.collections.specialized\\4.3.0\\system.collections.specialized.4.3.0.nupkg.sha512",
     "C:\\Users\\zaggn\\.nuget\\packages\\system.diagnostics.debug\\4.3.0\\system.diagnostics.debug.4.3.0.nupkg.sha512",

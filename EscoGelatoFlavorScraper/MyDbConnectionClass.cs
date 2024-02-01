@@ -12,6 +12,7 @@ namespace EscoGelatoFlavorScraper
     {
         internal MyDbConnectionClass()
         {
+            //does nothing
         }
 
         public MyDbConnectionClass(string? server, string? databaseName, string? userName, 
@@ -35,9 +36,10 @@ namespace EscoGelatoFlavorScraper
         private static MyDbConnectionClass? _instance = null;
 
         //this singleton code doesnt seem to be done correctly
-        public static MyDbConnectionClass Instance() //the Instance() is used in this case to attempt Singleton DP
+        public static MyDbConnectionClass Instance()
         {
             // ??= is same as checking if _instance is null then assigning it the object if it is null.
+            //this helps ensure that no more than one Object is created when Instance() method is called.
             _instance ??= new MyDbConnectionClass(); 
             return _instance;
         }
@@ -46,6 +48,8 @@ namespace EscoGelatoFlavorScraper
         /// Perhaps this method should be split up
         /// </summary>
         /// <returns></returns>
+        /// <issue>need to do validation check on all inputs for DB connection,
+        ///     not just DatabaseName</issue>
         public bool IsConnect()
         {
             if (Connection == null)
