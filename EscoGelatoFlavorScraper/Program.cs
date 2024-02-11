@@ -37,20 +37,6 @@ namespace EscoGelatoFlavorScraper
     ///     EscoGelato posts their in-stock flavors on their website.  This program scrapes that flavor
     ///     posting data and alerts users via text messege if their favorite flavors are in-stock.
     /// </summary>
-    /// <issues>
-    ///     Refactoring code needed.
-    ///     SQL statements expose some internals to public via GitHub
-    ///     There are now Restrictions on the use of Twilio's API (see their website).
-    /// </issues>
-    /// <changes>
-    ///     added DbConnection to ExitProgram method to close connection there.
-    ///     passed LatestFlavorPostingDate as an argument to isLatestFlavorPosting method instead of hardcoding its value
-    ///     implemented UpdateLatestFlavorPostingDate method
-    ///     partially implemented Send Message method to all salient customers
-    ///     added TwilioConfigData and EscoGelatoDBConfig static data classes
-    ///     switched to Relative Pathing for xpath locators
-    ///     switched to Explicit waits for Selenium WebDriver
-    /// </changes>
     /// <todo>
     ///     *Need to test more in regards to sending out proper messages to the appropriate customers.
     ///     *fix the extra comma and spacing in the sent out text message alerts.
