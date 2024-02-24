@@ -11,6 +11,7 @@ and a collection of those customers' favorite flavors.  Each customer that has a
 will then recieve a text message informing them that their favorite flavors are instock.  This solves an
 issue with customers not feeling inclined to check the company's Twitter feed often.
 Tech: C#, 6.0.NET, Selenium Webdriver, Twilio API, MySQL RDMS
+Notice: An older version of their website's files are included for the purposes of testing the webscraping.
 ```
 
 ### Prerequisites
@@ -18,7 +19,9 @@ Tech: C#, 6.0.NET, Selenium Webdriver, Twilio API, MySQL RDMS
 What things you need to install and what you need to do
 
 ```
-Unfortunately, The remote instance of MySQL hosted by AWS is now costing me $, therefore i have migrated the instance to my a personal server, therefore getting Customer data is unavailable to the public developers at this time.
+Unfortunately, The remote instance of MySQL hosted by AWS is now costing me $,
+therefore i have migrated the instance to my a personal server,
+therefore getting Customer data is unavailable to the public developers at this time.
 
 Installation of Visual Studio along with your own Twilio API key
 
